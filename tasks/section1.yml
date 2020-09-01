@@ -676,6 +676,12 @@
 - name: "SCORED | 1.4.1 | PATCH | Stat AIDE DB"
   stat: path=/var/lib/aide/aide.db
   register: aide_db
+  tags:
+      - level1
+      - scored
+      - aide
+      - patch
+      - rule_1.4.1
 
 - name: "SCORED | 1.4.1 | PATCH | Init AIDE | This may take a LONG time"
   command: /usr/sbin/aideinit
@@ -714,7 +720,7 @@
       - patch
       - rule_1.4.2
 
-- name: "SCORED | 1.5.1 | PATCH | Ensure permissions on bootloader config are configured"
+- name: "SCORED | 1.5.1 | PATCH | Ensure permissions on bootloader config are configured for grub.cfg"
   file:
       path: "/boot/grub/grub.cfg"
       owner: root
@@ -723,6 +729,40 @@
   when:
       - ansible_os_family == "Debian"
       - ubuntu1804cis_rule_1_5_1
+  tags:
+      - level1
+      - scored
+      - grub
+      - patch
+      - rule_1.5.1
+
+- name: "SCORED | 1.5.1 | PATCH | Ensure permissions on bootloader config are configured for grub.conf"
+  file:
+      path: "/boot/grub/grub.conf"
+      owner: root
+      group: root
+      mode: 0400
+  when:
+      - ansible_os_family == "Debian"
+      - ubuntu1804cis_rule_1_5_1
+      - grub_conf.stat.exists
+  tags:
+      - level1
+      - scored
+      - grub
+      - patch
+      - rule_1.5.1
+
+- name: "SCORED | 1.5.1 | PATCH | Ensure permissions on bootloader config are configured for menu.lst"
+  file:
+      path: "/boot/grub/menu.lst"
+      owner: root
+      group: root
+      mode: 0400
+  when:
+      - ansible_os_family == "Debian"
+      - ubuntu1804cis_rule_1_5_1
+      - menu_lst.stat.exists
   tags:
       - level1
       - scored
@@ -904,10 +944,11 @@
 - name: "SCORED | 1.6.4 | PATCH | Ensure hard core 0 is set"
   lineinfile:
     dest: /etc/security/limits.conf
-    line: '* hard core 0'
-    regexp: '(^#\s*?\*\s+hard\s+core\s+[0-9]+)'
+    line: '*                hard    core            0'
+    regexp: '(^#)?\*\s+hard\s+core\s+[0-9]+'
     state: present
     create: true
+    insertbefore: "# End of file"
   notify: restart systemd-coredump
   when:
       - ubuntu1804cis_rule_1_6_4
@@ -933,8 +974,24 @@
       - rule_1.7.1.1
 
 - name: "SCORED | 1.7.1.2 | PATCH | Ensure AppArmor is enabled in the bootloader configuration"
-  command: /bin/true
-  changed_when: false
+  block:
+      - name: "SCORED | 1.7.1.2 | PATCH | Ensure AppArmor is enabled in the bootloader configuration"
+        replace:
+            dest: /etc/default/grub
+            regexp: '^(GRUB_CMDLINE_LINUX=(?!.*apparmor)\"[^\"]*)(\".*)'
+            replace: '\1 apparmor=1 security=apparmor\2'
+            follow: true
+        notify:
+            - generate new grub config
+
+      - name: "SCORED | 1.7.1.2 | PATCH | Ensure AppArmor Security is enabled in the bootloader configuration"
+        replace:
+            dest: /etc/default/grub
+            regexp: '^(GRUB_CMDLINE_LINUX=(?!.*security)\"[^\"]*)(\".*)'
+            replace: '\1 security=apparmor\2'
+            follow: true
+        notify:
+            - generate new grub config
   when:
       - ubuntu1804cis_rule_1_7_1_2
   tags:
@@ -942,7 +999,6 @@
       - scored
       - patch
       - rule_1.7.1.2
-      - notimplemented
 
 - name: "SCORED | 1.7.1.3 | PATCH | Ensure all AppArmor Profiles are in enforce or complain mode"
   command: /bin/true
